@@ -6,6 +6,8 @@ services:
       - "9090:9090"
     depends_on:
       - stats-db
+    environment:
+      - TZ=Europe/Moscow
 
   stats-db:
     image: postgres:14-alpine
@@ -24,6 +26,15 @@ services:
       - "8080:8080"
     depends_on:
       - ewm-db
+      - stats-server
+    environment:
+      - TZ=Europe/Moscow
 
   ewm-db:
     image: postgres:14-alpine
+    ports:
+      - "6542:5432"
+    environment:
+      POSTGRES_DB: ewmMain
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
