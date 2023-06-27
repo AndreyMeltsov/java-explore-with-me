@@ -29,7 +29,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .name(categoryDto.getName())
                 .build();
         Category savedCategory = categoryRepository.save(category);
-        log.info("Category was added: {}", savedCategory);
+        log.info("Category with id = {} and name = {} was added", savedCategory.getId(), savedCategory.getName());
         return savedCategory;
     }
 
@@ -43,7 +43,7 @@ public class CategoryServiceImpl implements CategoryService {
             throw new ConflictException("Category cannot be removed. There are some events in this category.");
         }
         categoryRepository.deleteById(catId);
-        log.info("Category was deleted: {}", catId);
+        log.info("Category with id = {} was deleted", catId);
     }
 
     @Transactional
@@ -57,7 +57,8 @@ public class CategoryServiceImpl implements CategoryService {
         }
         category.setName(categoryDto.getName());
         categoryRepository.save(category);
-        log.info("Category was updated in DB by initiator. New category is: {}", category);
+        log.info("Category with id = {} was updated in DB by initiator. New name = {}",
+                category.getId(), category.getName());
         return category;
     }
 

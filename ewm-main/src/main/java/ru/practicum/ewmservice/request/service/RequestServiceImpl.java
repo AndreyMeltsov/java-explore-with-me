@@ -21,8 +21,11 @@ import ru.practicum.ewmservice.user.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -90,11 +93,12 @@ public class RequestServiceImpl implements RequestService {
             }
         }
 
-        if (!confirmedRequests.isEmpty()) {
-            requestRepository.saveAll(confirmedRequests);
-        }
-        if (!rejectedRequests.isEmpty()) {
-            requestRepository.saveAll(rejectedRequests);
+        List<Request> allRequests = Stream.of(confirmedRequests, rejectedRequests)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        if (!allRequests.isEmpty()) {
+            requestRepository.saveAll(allRequests);
         }
 
         result = new EventRequestStatusUpdateResult(requestMapper.mapToDto(confirmedRequests),
@@ -154,7 +158,8 @@ public class RequestServiceImpl implements RequestService {
         Request request = requestRepository.findById(requestId).orElseThrow(
                 () -> new NotFoundException("Request with such id wasn't found"));
         if (!request.getRequester().getId().equals(userId)) {
-            throw new ConflictException("Only the owner can update the request");
+            throw new ConflictException(String.format("User with id = %d can't cancel the request with id = %d " +
+                    "because he isn't its creator", userId, requestId));
         }
         request.setStatus(RequestStatus.CANCELED);
         ParticipationRequestDto requestDto = requestMapper.mapToDto(requestRepository.save(request));

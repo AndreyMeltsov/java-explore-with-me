@@ -25,8 +25,6 @@ import ru.practicum.ewmservice.exception.NotFoundException;
 import ru.practicum.ewmservice.exception.ValidationException;
 import ru.practicum.ewmservice.user.User;
 import ru.practicum.ewmservice.user.UserRepository;
-import ru.practicum.statclient.StatClient;
-import ru.practicum.statdto.HitDto;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
@@ -46,13 +44,16 @@ public class EventServiceImpl implements EventService {
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
+    private final StatisticService statisticService;
     private final EventMapper eventMapper;
-    private final StatClient client;
+
 
     @Override
     public List<EventShortDto> getEventsByUserId(Long userId, Pageable pageRequest) {
         List<Event> events = eventRepository.findByInitiatorId(userId, pageRequest);
-        List<EventShortDto> eventShort = eventMapper.mapToShortDto(events);
+        List<EventShortDto> eventShort = events.stream()
+                .map(e -> eventMapper.mapToShortDto(e, statisticService.getViews(e)))
+                .collect(Collectors.toList());
         log.info("Events was found in DB: {}", eventShort);
         return eventShort;
     }
@@ -90,7 +91,7 @@ public class EventServiceImpl implements EventService {
     public EventFullDto getEventByIdAndUserId(Long eventId, Long userId) {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Event with id wasn't found"));
-        EventFullDto eventFull = eventMapper.mapToFullDto(event);
+        EventFullDto eventFull = eventMapper.mapToFullDto(event, statisticService.getViews(event));
         log.info("Event was found in DB: {}", eventFull);
         return eventFull;
     }
@@ -156,7 +157,9 @@ public class EventServiceImpl implements EventService {
                 .orElseThrow(() -> new NotFoundException("At least one condition should be assigned"));
 
         List<Event> events = eventRepository.findAll(finalCondition, request.getPageRequest()).getContent();
-        List<EventFullDto> eventFullDtos = eventMapper.mapToFullDto(events);
+        List<EventFullDto> eventFullDtos = events.stream()
+                .map(e -> eventMapper.mapToFullDto(e, statisticService.getViews(e)))
+                .collect(Collectors.toList());
         log.info("{} events was found in DB: {}", eventFullDtos.size(), eventFullDtos);
         return eventFullDtos;
     }
@@ -214,9 +217,9 @@ public class EventServiceImpl implements EventService {
         if (!event.getState().equals(EventState.PUBLISHED)) {
             throw new NotFoundException("Event with such id neither was published nor canceled");
         }
-        EventFullDto eventFull = eventMapper.mapToFullDto(event);
+        EventFullDto eventFull = eventMapper.mapToFullDto(event, statisticService.getViews(event));
         log.info("Event was found in DB: {}", eventFull);
-        sendStatistic(request);
+        statisticService.sendStatistic(request);
         return eventFull;
     }
 
@@ -249,7 +252,9 @@ public class EventServiceImpl implements EventService {
         List<Event> events = new ArrayList<>();
         eventRepository.findAll(finalCondition).forEach(events::add);
 
-        List<EventFullDto> eventFullDtos = eventMapper.mapToFullDto(events);
+        List<EventFullDto> eventFullDtos = events.stream()
+                .map(e -> eventMapper.mapToFullDto(e, statisticService.getViews(e)))
+                .collect(Collectors.toList());
 
         if (queryRequest.isOnlyAvailable()) {
             eventFullDtos = eventFullDtos.stream()
@@ -270,7 +275,7 @@ public class EventServiceImpl implements EventService {
                 .collect(Collectors.toList());
         List<EventShortDto> eventShortDtos = eventMapper.fullToShortDto(eventFullDtos);
         log.info("{} events was found in DB: {}", eventShortDtos.size(), eventShortDtos);
-        sendStatistic(request);
+        statisticService.sendStatistic(request);
         return eventShortDtos;
     }
 
@@ -287,17 +292,6 @@ public class EventServiceImpl implements EventService {
         } else {
             return QEvent.event.eventDate.isNotNull();
         }
-    }
-
-    private void sendStatistic(HttpServletRequest request) {
-        HitDto hitDto = HitDto.builder()
-                .app("ewm-main")
-                .uri(request.getRequestURI())
-                .ip(request.getRemoteAddr())
-                .timestamp(LocalDateTime.now().format(FORMATTER))
-                .build();
-        log.info("Client will send next info to statistic server: {}", hitDto);
-        client.post(hitDto);
     }
 
     private Comparator<EventFullDto> getComparator(GetEventsByQueryRequest.Sort sort) {
