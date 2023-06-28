@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -70,28 +71,29 @@ public class RequestServiceImpl implements RequestService {
             return result;
         }
 
-        int vacancyLeft = event.getParticipantLimit() - getConfirmedRequests(eventId);
+        final AtomicInteger vacancyLeft = new AtomicInteger(event.getParticipantLimit()
+                - getConfirmedRequests(eventId));
 
-        if (vacancyLeft <= 0) {
+        if (vacancyLeft.get() <= 0) {
             throw new ConflictException("The participant limit has been already reached");
         }
 
         List<Request> confirmedRequests = new ArrayList<>();
         List<Request> rejectedRequests = new ArrayList<>();
 
-        for (Request request : requests) {
+        requests.forEach(request -> {
             if (!request.getStatus().equals(RequestStatus.PENDING)) {
                 throw new ConflictException("Request must have status PENDING");
             }
-            if (updatedRequest.getStatus().equals(RequestStatus.CONFIRMED) && vacancyLeft > 0) {
+            if (updatedRequest.getStatus().equals(RequestStatus.CONFIRMED) && vacancyLeft.get() > 0) {
                 request.setStatus(RequestStatus.CONFIRMED);
                 confirmedRequests.add(request);
-                vacancyLeft--;
+                vacancyLeft.decrementAndGet();
             } else {
                 request.setStatus(RequestStatus.REJECTED);
                 rejectedRequests.add(request);
             }
-        }
+        });
 
         List<Request> allRequests = Stream.of(confirmedRequests, rejectedRequests)
                 .flatMap(Collection::stream)
