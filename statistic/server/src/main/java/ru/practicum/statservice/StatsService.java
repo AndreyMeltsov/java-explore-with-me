@@ -1,4 +1,4 @@
-package ru.practicum.ewm;
+package ru.practicum.statservice;
 
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -8,10 +8,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.practicum.HitDto;
-import ru.practicum.ViewStatsDto;
+import ru.practicum.statdto.HitDto;
+import ru.practicum.statdto.ViewStatsDto;
+import ru.practicum.statservice.exseptions.DateTimeDecodingException;
+import ru.practicum.statservice.exseptions.IllegalArgumentExcepton;
+import ru.practicum.statservice.exseptions.NotFoundException;
 
 import javax.persistence.EntityManager;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -22,34 +28,45 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class StatsService {
-    private final EntityManager entityManager;
     private final StatsRepository statsRepository;
+    private final EntityManager entityManager;
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Transactional
     public void createHit(HitDto hitDto) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         Hit hit = Hit.builder()
                 .app(hitDto.getApp())
                 .ip(hitDto.getIp())
                 .uri(hitDto.getUri())
-                .timestamp(LocalDateTime.parse(hitDto.getTimestamp(), formatter))
+                .timestamp(LocalDateTime.parse(hitDto.getTimestamp(), FORMATTER))
                 .build();
-        hit = statsRepository.save(hit);
-        log.info("Statistic was added: {}", hit);
+        log.info("Statistic was added: {}", statsRepository.save(hit));
     }
 
-    public List<ViewStatsDto> getStats(LocalDateTime from, LocalDateTime to, String[] uris, boolean unique) {
-        QHit hit = QHit.hit;
-        JPAQueryFactory queryFactory = new JPAQueryFactory(entityManager);
-        List<BooleanExpression> conditions = new ArrayList<>();
+    public List<ViewStatsDto> getStats(String start, String end, String[] uris, boolean unique) {
+        LocalDateTime from;
+        LocalDateTime to;
+        try {
+            from = LocalDateTime.parse(decodeValue(start), FORMATTER);
+            to = LocalDateTime.parse(decodeValue(end), FORMATTER);
+        } catch (UnsupportedEncodingException e) {
+            throw new DateTimeDecodingException("Can't decode received value");
+        }
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentExcepton("Start date can't be later end date");
+        }
 
-        conditions.add(hit.timestamp.between(from, to));
+        QHit hit = QHit.hit;
+        List<BooleanExpression> conditions = new ArrayList<>();
+        JPAQueryFactory queryFactory = new JPAQueryFactory(entityManager);
+
+        conditions.add(hit.timestamp.goe(from).and(hit.timestamp.loe(to)));
         if (uris != null) {
             conditions.add(hit.uri.in(uris));
         }
         BooleanExpression finalCondition = conditions.stream()
                 .reduce(BooleanExpression::and)
-                .get();
+                .orElseThrow(() -> new NotFoundException("At least one condition should be assigned"));
 
         List<ViewStatsDto> stats = queryFactory
                 .select(Projections.constructor(ViewStatsDto.class, hit.app, hit.uri, makeUniqueCondition(unique)))
@@ -70,5 +87,9 @@ public class StatsService {
         } else {
             return QHit.hit.ip.count();
         }
+    }
+
+    private String decodeValue(String value) throws UnsupportedEncodingException {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8.toString());
     }
 }
