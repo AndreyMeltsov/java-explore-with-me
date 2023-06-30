@@ -2,6 +2,9 @@ package ru.practicum.ewmservice.event;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import ru.practicum.ewmservice.comment.CommentMapper;
+import ru.practicum.ewmservice.comment.CommentRepository;
+import ru.practicum.ewmservice.comment.CommentStatus;
 import ru.practicum.ewmservice.event.dto.EventFullDto;
 import ru.practicum.ewmservice.event.dto.EventShortDto;
 import ru.practicum.ewmservice.request.RequestRepository;
@@ -17,6 +20,8 @@ import java.util.stream.Collectors;
 public class EventMapper {
     private final UserMapper userMapper;
     private final RequestRepository requestRepository;
+    private final CommentRepository commentRepository;
+    private final CommentMapper commentMapper;
 
     public EventShortDto mapToShortDto(Event event, Long views) {
         return EventShortDto.builder()
@@ -30,6 +35,8 @@ public class EventMapper {
                 .paid(event.isPaid())
                 .title(event.getTitle())
                 .views(views)
+                .comments(commentMapper.mapToDto(commentRepository.findByEventIdAndStatus(event.getId(),
+                        CommentStatus.APPROVED)))
                 .build();
     }
 
@@ -44,6 +51,7 @@ public class EventMapper {
                 .paid(eventFullDto.isPaid())
                 .title(eventFullDto.getTitle())
                 .views(eventFullDto.getViews())
+                .comments(eventFullDto.getComments())
                 .build();
     }
 
@@ -66,6 +74,8 @@ public class EventMapper {
                 .state(event.getState().name())
                 .title(event.getTitle())
                 .views(views)
+                .comments(commentMapper.mapToDto(commentRepository.findByEventIdAndStatus(event.getId(),
+                        CommentStatus.APPROVED)))
                 .build();
     }
 
