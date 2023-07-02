@@ -9,9 +9,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import ru.practicum.ewmservice.category.Category;
+import ru.practicum.ewmservice.comment.dto.CommentDto;
 import ru.practicum.ewmservice.user.dto.UserShortDto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -39,4 +41,6 @@ public class EventShortDto {
     private String title;
 
     private Long views;
+
+    private List<CommentDto> comments;
 }
